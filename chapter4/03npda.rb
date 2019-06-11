@@ -48,176 +48,91 @@ class PDARule < Struct.new(:state, :character, :next_state,
   end
 end
 
-class DPDARulebook < Struct.new(:rules)
-  def next_configuration(configuration, character)
-    rule_for(configuration, character).follow(configuration)
+require 'set'
+
+class NPDARulebook < Struct.new(:rules)
+  def next_configurations(configurations, character)
+    configurations.flat_map { |config| follow_rules_for(config, character) }.to_set
   end
 
-  def rule_for(configuration, character)
-    rules.detect { |rule| rule.applies_to?(configuration, character)}
+  def follow_rules_for(configuration, character)
+    rules_for(configuration, character).map { |rule| rule.follow(configuration)}
   end
 
-  def applies_to?(configuration, character)
-    !rule_for(configuration, character).nil?
+  def rules_for(configuration, character)
+    rules.select { |rule| rule.applies_to?(configuration, character) }
   end
 
-  def follow_free_moves(configuration)
-    if applies_to?(configuration, nil)
-      follow_free_moves(next_configuration(configuration, nil))
+  def follow_free_moves(configurations)
+    more_configurations = next_configurations(configurations, nil)
+    if more_configurations.subset?(configurations)
+      configurations
     else
-      configuration
+      follow_free_moves(configurations + more_configurations)
     end
   end
 end
 
-class DPDA < Struct.new(:current_configuration, :accept_states, :rulebook)
+class NPDA < Struct.new(:current_configurations, :accept_states, :rulebook)
   def accepting?
-    accept_states.include?(current_configuration.state)
-  end
-
-  def next_configuration(character)
-    if rulebook.applies_to?(current_configuration, character)
-      rulebook.next_configuration(current_configuration, character)
-    else
-      current_configuration.stuck
-    end
-  end
-
-  def stuck?
-    current_configuration.stuck?
+    current_configurations.any? { |config| accept_states.include?(config.state)}
   end
 
   def read_character(character)
-    self.current_configuration = next_configuration(character)
+    self.current_configurations = 
+      rulebook.next_configurations(current_configurations, character)
   end
 
   def read_string(string)
     string.chars.each do |character|
-      read_character(character) unless stuck?
+      read_character(character)
     end
   end
 
-  def current_configuration
+  def current_configurations
     rulebook.follow_free_moves(super)
   end
 end
 
-class DPDADesign < Struct.new(:start_state, :bottom_character,
+class NPDADesign < Struct.new(:start_state, :bottom_character, 
                               :accept_states, :rulebook)
   def accepts?(string)
-    to_dpda.tap { |dpda| dpda.read_string(string) }.accepting?
+    to_npda.tap { |npda| npda.read_string(string) }.accepting?
   end
 
-  def to_dpda
+  def to_npda
     start_stack = Stack.new([bottom_character])
     start_configuration = PDAConfiguration.new(start_state, start_stack)
-    DPDA.new(start_configuration, accept_states, rulebook)
+    NPDA.new(Set[start_configuration], accept_states, rulebook)
   end
 end
 
-rule = PDARule.new(1, '(', 2, '$', ['b', '$'])
-configuration = PDAConfiguration.new(1, Stack.new(['$']))
-rule.applies_to?(configuration, '(')
-rule.follow(configuration)
-
-rulebook = DPDARulebook.new([
-  PDARule.new(1, '(', 2, '$', ['b', '$']),
-  PDARule.new(2, '(', 2, 'b', ['b', 'b']),
-  PDARule.new(2, ')', 2, 'b', []),
-  PDARule.new(2, nil, 1, '$', ['$'])
-])
-configuration = rulebook.next_configuration(configuration, '(')
-configuration = rulebook.next_configuration(configuration, '(')
-configuration = rulebook.next_configuration(configuration, ')')
-
-dpda = DPDA.new(PDAConfiguration.new(1, Stack.new(['$'])), [1], rulebook)
-dpda.accepting?
-dpda.read_string('(()'); dpda.accepting?
-dpda.current_configuration
-
-configuration = PDAConfiguration.new(2, Stack.new(['$']))
-rulebook.follow_free_moves(configuration)
-
-# # 無限ループの例
-# DPDARulebook.new([PDARule.new(1, nil, 1, '$', ['$'])]).
-#   follow_free_moves(PDAConfiguration.new(1, Stack.new(['$'])))
-
-dpda = DPDA.new(PDAConfiguration.new(1, Stack.new(['$'])), [1], rulebook)
-dpda.read_string('(()('); dpda.accepting?
-dpda.current_configuration
-dpda.read_string('))()'); dpda.accepting?
-dpda.current_configuration
-
-dpda_design = DPDADesign.new(1, '$', [1], rulebook)
-dpda_design.accepts?('(((((((((())))))))))')
-dpda_design.accepts?('()(())((()))(()(()))')
-dpda_design.accepts?('((((((()))((((()((((')
-
-# 行き詰まり状態
-dpda = DPDA.new(PDAConfiguration.new(1, Stack.new(['$'])), [1], rulebook)
-dpda.read_string('())'); dpda.current_configuration
-dpda.accepting?
-dpda.stuck?
-
-dpda_design = DPDADesign.new(1, '$', [1], rulebook)
-dpda_design.accepts?('())')
-
-
-# aとbの文字を同じ数だけ含んだ文字列を認識する機械
-rulebook = DPDARulebook.new([
-  PDARule.new(1, 'a', 2, '$', ['a', '$']),
-  PDARule.new(1, 'b', 2, '$', ['b', '$']),
-  PDARule.new(2, 'a', 2, 'a', ['a', 'a']),
-  PDARule.new(2, 'b', 2, 'b', ['b', 'b']),
-  PDARule.new(2, 'a', 2, 'b', []),
-  PDARule.new(2, 'b', 2, 'a', []),
-  PDARule.new(2, nil, 1, '$', ['$'])
-])
-dpda_design = DPDADesign.new(1, '$', [1], rulebook)
-dpda_design.accepts?('ababab')
-dpda_design.accepts?('bbbaaaab')
-dpda_design.accepts?('baa')
-
-
-# aとbの文字を同じ数だけ含んだ文字列を認識する機械（その２）
-rulebook = DPDARulebook.new([
-  PDARule.new(1, 'a', 2, '$', ['c', '$']),
-  PDARule.new(2, 'a', 2, 'c', ['c', 'c']),
-  PDARule.new(2, 'b', 2, 'c', []),
-  PDARule.new(2, nil, 1, '$', ['$']),
-  PDARule.new(1, 'b', 3, '$', ['c', '$']),
-  PDARule.new(3, 'b', 3, 'c', ['c', 'c']),
-  PDARule.new(3, 'a', 3, 'c', []),
-  PDARule.new(3, nil, 1, '$', ['$'])
-])
-dpda_design = DPDADesign.new(1, '$', [1], rulebook)
-dpda_design.accepts?('ababab')
-dpda_design.accepts?('bbbaaaab')
-dpda_design.accepts?('baa')
-dpda = DPDA.new(PDAConfiguration.new(1, Stack.new(['$'])), [1], rulebook)
-dpda.read_string('aab'); dpda.accepting?
-dpda.current_configuration
-dpda.read_string('bbab'); dpda.accepting?
-dpda.current_configuration
-
-
-# 回文を認識する機械
-rulebook = DPDARulebook.new([
+rulebook = NPDARulebook.new([
   PDARule.new(1, 'a', 1, '$', ['a', '$']),
   PDARule.new(1, 'a', 1, 'a', ['a', 'a']),
   PDARule.new(1, 'a', 1, 'b', ['a', 'b']),
   PDARule.new(1, 'b', 1, '$', ['b', '$']),
   PDARule.new(1, 'b', 1, 'a', ['b', 'a']),
   PDARule.new(1, 'b', 1, 'b', ['b', 'b']),
-  PDARule.new(1, 'm', 2, '$', ['$']),
-  PDARule.new(1, 'm', 2, 'a', ['a']),
-  PDARule.new(1, 'm', 2, 'b', ['b']),
+  PDARule.new(1, nil, 2, '$', ['$']),
+  PDARule.new(1, nil, 2, 'a', ['a']),
+  PDARule.new(1, nil, 2, 'b', ['b']),
   PDARule.new(2, 'a', 2, 'a', []),
   PDARule.new(2, 'b', 2, 'b', []),
   PDARule.new(2, nil, 3, '$', ['$'])
 ])
-dpda_design = DPDADesign.new(1, '$', [3], rulebook)
-dpda_design.accepts?('abmba')
-dpda_design.accepts?('babbamabbab')
-dpda_design.accepts?('abmb')
-dpda_design.accepts?('baambaa')
+configuration = PDAConfiguration.new(1, Stack.new(['$']))
+npda = NPDA.new(Set[configuration], [3], rulebook)
+npda.accepting?
+npda.current_configurations
+npda.read_string('abb'); npda.accepting?
+npda.current_configurations
+npda.read_character('a'); npda.accepting?
+npda.current_configurations
+
+npda_design = NPDADesign.new(1, '$', [3], rulebook)
+npda_design.accepts?('abba')
+npda_design.accepts?('babbaabbab')
+npda_design.accepts?('abb')
+npda_design.accepts?('baabaa')
+npda_design.accepts?('aba')
