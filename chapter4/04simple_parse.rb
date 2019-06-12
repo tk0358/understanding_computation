@@ -4,7 +4,7 @@ class LexicalAnalyzer < Struct.new(:string)
     { token: 'e', pattern: /else/       }, # elseキーワード
     { token: 'w', pattern: /while/      }, # whileキーワード
     { token: 'd', pattern: /do-nothing/ }, # do-nothingキーワード
-    { token: '(', pattern: /\(/)        }, # 開き括弧
+    { token: '(', pattern: /\(/         }, # 開き括弧
     { token: ')', pattern: /\)/         }, # 閉じ括弧
     { token: '{', pattern: /\{/         }, # 開き中括弧
     { token: '}', pattern: /\}/         }, # 閉じ中括弧
@@ -49,4 +49,15 @@ class LexicalAnalyzer < Struct.new(:string)
   def rule_with_longest_match(rules_with_matches)
     rules_with_matches.max_by { |rule, match| match.to_s.length}
   end
+
+  def string_after(match)
+    match.post_match.lstrip
+  end
 end
+
+LexicalAnalyzer.new('y = x * 7').analyze
+LexicalAnalyzer.new('while (x < 5) { x = x * 3 }').analyze
+LexicalAnalyzer.new('if (x < 10) { y = true; x = 0 } else { do-nothing }').analyze
+
+LexicalAnalyzer.new('x = false').analyze
+LexicalAnalyzer.new('x = falsehood').analyze
