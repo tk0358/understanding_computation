@@ -24,10 +24,10 @@ grammar LambdaCalculus
   end
 
   rule function
-    '-> ' parameter:[a-z]+ ' { ' body:expression ' }' {
+    '-> ' parameter:[a-z]+ ' { ' body:expression ' } ' {
       def to_ast
         LCFunction.new(parameter.text_value.to_sym, body.to_ast)
       end
-    }
+    } 
   end
 end

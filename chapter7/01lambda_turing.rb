@@ -58,17 +58,6 @@ IS_EMPTY = LEFT
 FIRST    = -> l { LEFT[RIGHT[l]] }
 REST     = -> l { RIGHT[RIGHT[l]] }
 
-def to_array(proc)
-  array = []
-
-  until to_boolean(IS_EMPTY[proc])
-    array.push(FIRST[proc])
-    proc = REST[proc]
-  end
-
-  array
-end
-
 RANGE =
   Z[-> f {
     -> m { ->n { 
@@ -150,34 +139,56 @@ TO_DIGITS =
     ]
   ][MOD[n][TEN]] } }]
 
-to_array(TO_DIGITS[FIVE]).map { |p| to_integer(p) }
-to_array(TO_DIGITS[POWER[FIVE][THREE]]).map { |p| to_integer(p) }
+ZEROS = Z[-> f { UNSHIFT[f][ZERO] }]
 
-# MAP[RANGE[ONE][HUNDRED]][-> n {
-#   IF[IS_ZERO[MOD[n][FIFTEEN]]][
-#     FIZZBUZZ
-#   ][IF[IS_ZERO[MOD[n][THREE]]][
-#     FIZZ
-#   ][IF[IS_ZERO[MOD[n][FIVE]]][
-#     BUZZ
-#   ][
-#     TO_DIGITS[n]
-#   ]]] 
-# }]
+def to_array(l, count = nil)
+  array = []
 
-# solution = 
-#   MAP[RANGE[ONE][HUNDRED]][-> n {
-#     IF[IS_ZERO[MOD[n][FIFTEEN]]][
-#       FIZZBUZZ
-#     ][IF[IS_ZERO[MOD[n][THREE]]][
-#       FIZZ
-#     ][IF[IS_ZERO[MOD[n][FIVE]]][
-#       BUZZ
-#     ][
-#       TO_DIGITS[n]
-#     ]]] 
-#   }]
+  until to_boolean(IS_EMPTY[l]) || count == 0
+    array.push(FIRST[l])
+    l = REST[l]
+    count = count - 1 unless count.nil?
+  end
 
-# to_array(solution).each do |p|
-#   puts to_string(p)
-# end; nil
+  array
+end
+
+TAPE        = -> l { -> m { -> r { -> b { PAIR[PAIR[l][m]][PAIR[r][b]] } } } }
+TAPE_LEFT   = -> t { LEFT[LEFT[t]] }
+TAPE_MIDDLE = -> t { RIGHT[LEFT[t]] }
+TAPE_RIGHT  = -> t { LEFT[RIGHT[t]] }
+TAPE_BLANK  = -> t { RIGHT[RIGHT[t]] }
+
+TAPE_WRITE  = -> t { -> c { TAPE[TAPE_LEFT[t]][c][TAPE_RIGHT[t]][TAPE_BLANK[t]] } }
+
+TAPE_MOVE_HEAD_RIGHT =
+  -> t {
+    TAPE[
+      PUSH[TAPE_LEFT[t]][TAPE_MIDDLE[t]]
+    ][
+      IF[IS_EMPTY[TAPE_RIGHT[t]]][
+        TAPE_BLANK[t]
+      ][
+        FIRST[TAPE_RIGHT[t]]
+      ]
+    ][
+      IF[IS_EMPTY[TAPE_RIGHT[t]]][
+        EMPTY
+      ][
+        REST[TAPE_RIGHT[t]]
+      ]
+    ][
+      TAPE_BLANK[t]
+    ]
+  }
+
+current_tape = TAPE[EMPTY][ZERO][EMPTY][ZERO]
+current_tape = TAPE_WRITE[current_tape][ONE]
+current_tape = TAPE_MOVE_HEAD_RIGHT[current_tape]
+current_tape = TAPE_WRITE[current_tape][TWO]
+current_tape = TAPE_MOVE_HEAD_RIGHT[current_tape]
+current_tape = TAPE_WRITE[current_tape][THREE]
+current_tape = TAPE_MOVE_HEAD_RIGHT[current_tape]
+to_array(TAPE_LEFT[current_tape]).map { |p| to_integer(p) }
+to_integer(TAPE_MIDDLE[current_tape])
+to_array(TAPE_RIGHT[current_tape]).map { |p| to_integer(p) }
