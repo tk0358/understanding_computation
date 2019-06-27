@@ -123,7 +123,7 @@ class If < Struct.new(:condition, :consequence, :alternative)
     "<<#{self}>>"
   end
 
-  def evalute(environment)
+  def evaluate(environment)
     case condition.evaluate(environment)
     when Boolean.new(true)
       consequence.evaluate(environment)
